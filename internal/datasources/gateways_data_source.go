@@ -5,6 +5,7 @@ import (
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	datasourceschema "github.com/hashicorp/terraform-plugin-framework/datasource/schema"
+	"github.com/hashicorp/terraform-plugin-framework/types"
 
 	"github.com/virtualmo/terraform-provider-netskopesdwan/internal/client"
 )
@@ -18,6 +19,10 @@ type gatewaysDataSource struct {
 	client *client.Client
 }
 
+type gatewaysDataSourceModel struct {
+	ID types.String `tfsdk:"id"`
+}
+
 func NewGatewaysDataSource() datasource.DataSource {
 	return &gatewaysDataSource{}
 }
@@ -28,7 +33,13 @@ func (d *gatewaysDataSource) Metadata(_ context.Context, req datasource.Metadata
 
 func (d *gatewaysDataSource) Schema(_ context.Context, _ datasource.SchemaRequest, resp *datasource.SchemaResponse) {
 	resp.Schema = datasourceschema.Schema{
-		Description: "Gateways data source placeholder.",
+		Description: "Reads the Netskope SD-WAN gateways collection.",
+		Attributes: map[string]datasourceschema.Attribute{
+			"id": datasourceschema.StringAttribute{
+				Computed:    true,
+				Description: "Synthetic identifier for the gateways collection.",
+			},
+		},
 	}
 }
 
@@ -45,7 +56,7 @@ func (d *gatewaysDataSource) Configure(_ context.Context, req datasource.Configu
 	d.client = apiClient
 }
 
-func (d *gatewaysDataSource) Read(_ context.Context, _ datasource.ReadRequest, resp *datasource.ReadResponse) {
+func (d *gatewaysDataSource) Read(ctx context.Context, _ datasource.ReadRequest, resp *datasource.ReadResponse) {
 	if d.client == nil {
 		resp.Diagnostics.AddError(
 			"Unconfigured provider client",
@@ -54,8 +65,20 @@ func (d *gatewaysDataSource) Read(_ context.Context, _ datasource.ReadRequest, r
 		return
 	}
 
-	resp.Diagnostics.AddError(
-		"Data source not implemented",
-		"TODO: The Netskope SD-WAN gateways API response shape is not confirmed yet, so this data source intentionally avoids inventing Terraform schema fields.",
-	)
+	_, err := d.client.ListGateways(ctx)
+	if err != nil {
+		resp.Diagnostics.AddError(
+			"Unable to read gateways",
+			err.Error(),
+		)
+		return
+	}
+
+	// TODO: Add Terraform-facing gateway attributes only after the real response
+	// item shape is confirmed. The client already isolates envelope uncertainty.
+	state := gatewaysDataSourceModel{
+		ID: types.StringValue("gateways"),
+	}
+
+	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
 }
