@@ -1,0 +1,59 @@
+# -----------------------------
+# Go
+# -----------------------------
+bin/
+build/
+dist/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Go test / coverage
+*.test
+*.out
+coverage.out
+
+# -----------------------------
+# Terraform
+# -----------------------------
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# -----------------------------
+# Local provider dev overrides
+# -----------------------------
+.terraformrc
+terraform.rc
+
+# -----------------------------
+# IDEs
+# -----------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# -----------------------------
+# OS
+# -----------------------------
+.DS_Store
+Thumbs.db
+
+# -----------------------------
+# Logs
+# -----------------------------
+*.log
+
+# -----------------------------
+# Env / secrets
+# -----------------------------
+.env
+.env.*
