@@ -25,7 +25,7 @@ type netskopeSDWANProvider struct{}
 type providerModel struct {
 	BaseURL  types.String `tfsdk:"base_url"`
 	APIToken types.String `tfsdk:"api_token"`
-	Timeout  types.String `tfsdk:"timeout"`
+	Timeout  types.Int64  `tfsdk:"timeout"`
 	Insecure types.Bool   `tfsdk:"insecure"`
 }
 
@@ -49,9 +49,9 @@ func (p *netskopeSDWANProvider) Schema(_ context.Context, _ provider.SchemaReque
 				Sensitive:   true,
 				Description: "API token for the Netskope SD-WAN API. Can also be set with NETSKOPESDWAN_API_TOKEN.",
 			},
-			"timeout": providerschema.StringAttribute{
+			"timeout": providerschema.Int64Attribute{
 				Optional:    true,
-				Description: "Optional HTTP timeout duration such as 30s. Can also be set with NETSKOPESDWAN_TIMEOUT.",
+				Description: "Optional HTTP timeout in seconds. Can also be set with NETSKOPESDWAN_TIMEOUT.",
 			},
 			"insecure": providerschema.BoolAttribute{
 				Optional:    true,
@@ -71,7 +71,7 @@ func (p *netskopeSDWANProvider) Configure(ctx context.Context, req provider.Conf
 
 	checkUnknownString(resp, config.BaseURL, path.Root("base_url"))
 	checkUnknownString(resp, config.APIToken, path.Root("api_token"))
-	checkUnknownString(resp, config.Timeout, path.Root("timeout"))
+	checkUnknownInt64(resp, config.Timeout, path.Root("timeout"))
 	checkUnknownBool(resp, config.Insecure, path.Root("insecure"))
 	if resp.Diagnostics.HasError() {
 		return
@@ -79,7 +79,6 @@ func (p *netskopeSDWANProvider) Configure(ctx context.Context, req provider.Conf
 
 	baseURL := firstNonEmpty(config.BaseURL.ValueString(), os.Getenv("NETSKOPESDWAN_BASE_URL"))
 	apiToken := firstNonEmpty(config.APIToken.ValueString(), os.Getenv("NETSKOPESDWAN_API_TOKEN"))
-	timeoutRaw := firstNonEmpty(config.Timeout.ValueString(), os.Getenv("NETSKOPESDWAN_TIMEOUT"))
 
 	insecure := false
 	if !config.Insecure.IsNull() {
@@ -117,20 +116,32 @@ func (p *netskopeSDWANProvider) Configure(ctx context.Context, req provider.Conf
 		return
 	}
 
-	timeout := 30 * time.Second
-	if timeoutRaw != "" {
-		parsedTimeout, err := time.ParseDuration(timeoutRaw)
+	timeoutSeconds := int64(30)
+	if !config.Timeout.IsNull() {
+		timeoutSeconds = config.Timeout.ValueInt64()
+	} else if envValue := os.Getenv("NETSKOPESDWAN_TIMEOUT"); envValue != "" {
+		parsedTimeout, err := strconv.ParseInt(envValue, 10, 64)
 		if err != nil {
 			resp.Diagnostics.AddAttributeError(
 				path.Root("timeout"),
 				"Invalid timeout value",
-				fmt.Sprintf("Expected timeout to be a valid duration such as 30s, got %q: %s", timeoutRaw, err),
+				fmt.Sprintf("Expected NETSKOPESDWAN_TIMEOUT to be an integer number of seconds, got %q: %s", envValue, err),
 			)
 			return
 		}
-		timeout = parsedTimeout
+		timeoutSeconds = parsedTimeout
 	}
 
+	if timeoutSeconds <= 0 {
+		resp.Diagnostics.AddAttributeError(
+			path.Root("timeout"),
+			"Invalid timeout value",
+			"Timeout must be greater than 0 seconds.",
+		)
+		return
+	}
+
+	timeout := time.Duration(timeoutSeconds) * time.Second
 	apiClient := client.New(baseURL, apiToken, timeout, insecure)
 	resp.DataSourceData = apiClient
 	resp.ResourceData = apiClient
@@ -168,6 +179,16 @@ func checkUnknownString(resp *provider.ConfigureResponse, value types.String, at
 }
 
 func checkUnknownBool(resp *provider.ConfigureResponse, value types.Bool, attributePath path.Path) {
+	if value.IsUnknown() {
+		resp.Diagnostics.AddAttributeError(
+			attributePath,
+			"Unknown provider attribute",
+			"This provider attribute must be known before configuring the provider.",
+		)
+	}
+}
+
+func checkUnknownInt64(resp *provider.ConfigureResponse, value types.Int64, attributePath path.Path) {
 	if value.IsUnknown() {
 		resp.Diagnostics.AddAttributeError(
 			attributePath,
