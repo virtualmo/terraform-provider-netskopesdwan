@@ -22,7 +22,17 @@ type gatewaysDataSource struct {
 }
 
 type gatewaysDataSourceModel struct {
-	ID types.String `tfsdk:"id"`
+	ID    types.String        `tfsdk:"id"`
+	Items []gatewayModelValue `tfsdk:"items"`
+}
+
+type gatewayModelValue struct {
+	ID                   types.String `tfsdk:"id"`
+	Name                 types.String `tfsdk:"name"`
+	CreatedAt            types.String `tfsdk:"created_at"`
+	ModifiedAt           types.String `tfsdk:"modified_at"`
+	ConfigUpdatesEnabled types.Bool   `tfsdk:"config_updates_enabled"`
+	Managed              types.Bool   `tfsdk:"managed"`
 }
 
 func NewGatewaysDataSource() datasource.DataSource {
@@ -40,6 +50,38 @@ func (d *gatewaysDataSource) Schema(_ context.Context, _ datasource.SchemaReques
 			"id": datasourceschema.StringAttribute{
 				Computed:    true,
 				Description: "Synthetic identifier for the gateways collection.",
+			},
+			"items": datasourceschema.ListNestedAttribute{
+				Computed:    true,
+				Description: "Gateways returned by GET /v2/gateways.",
+				NestedObject: datasourceschema.NestedAttributeObject{
+					Attributes: map[string]datasourceschema.Attribute{
+						"id": datasourceschema.StringAttribute{
+							Computed:    true,
+							Description: "Gateway identifier.",
+						},
+						"name": datasourceschema.StringAttribute{
+							Computed:    true,
+							Description: "Gateway name.",
+						},
+						"created_at": datasourceschema.StringAttribute{
+							Computed:    true,
+							Description: "Gateway creation timestamp returned by the API.",
+						},
+						"modified_at": datasourceschema.StringAttribute{
+							Computed:    true,
+							Description: "Gateway modification timestamp returned by the API.",
+						},
+						"config_updates_enabled": datasourceschema.BoolAttribute{
+							Computed:    true,
+							Description: "Whether config updates are enabled for the gateway.",
+						},
+						"managed": datasourceschema.BoolAttribute{
+							Computed:    true,
+							Description: "Whether the gateway is managed.",
+						},
+					},
+				},
 			},
 		},
 	}
@@ -67,7 +109,7 @@ func (d *gatewaysDataSource) Read(ctx context.Context, _ datasource.ReadRequest,
 		return
 	}
 
-	_, err := d.client.ListGateways(ctx)
+	result, err := d.client.ListGateways(ctx)
 	if err != nil {
 		resp.Diagnostics.AddError(
 			"Unable to read GET /v2/gateways",
@@ -76,10 +118,23 @@ func (d *gatewaysDataSource) Read(ctx context.Context, _ datasource.ReadRequest,
 		return
 	}
 
-	// TODO: Add Terraform-facing gateway attributes only after the real response
-	// item shape is confirmed. The client already isolates envelope uncertainty.
+	items := make([]gatewayModelValue, 0, len(result.Items))
+	for _, item := range result.Items {
+		items = append(items, gatewayModelValue{
+			ID:                   types.StringValue(item.ID),
+			Name:                 types.StringValue(item.Name),
+			CreatedAt:            types.StringValue(item.CreatedAt),
+			ModifiedAt:           types.StringValue(item.ModifiedAt),
+			ConfigUpdatesEnabled: types.BoolValue(item.ConfigUpdatesEnabled),
+			Managed:              types.BoolValue(item.Managed),
+		})
+	}
+
+	// TODO: Add pagination-aware Terraform behavior if users need access to
+	// cursors or multi-page reads beyond the current single-call list behavior.
 	state := gatewaysDataSourceModel{
-		ID: types.StringValue(gatewaysCollectionID),
+		ID:    types.StringValue(gatewaysCollectionID),
+		Items: items,
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)

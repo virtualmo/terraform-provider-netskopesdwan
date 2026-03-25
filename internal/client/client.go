@@ -18,13 +18,30 @@ type Client struct {
 	insecure   bool
 }
 
-// GatewayListResult keeps the uncertain API response shape isolated inside the client.
+// GatewayListResult contains the confirmed /v2/gateways response fields used by the provider.
 type GatewayListResult struct {
-	Items []json.RawMessage
+	PageInfo GatewayPageInfoDTO
+	Items    []GatewayDTO
 }
 
 type gatewayListResponseDTO struct {
-	Items []json.RawMessage
+	PageInfo GatewayPageInfoDTO `json:"page_info"`
+	Data     []GatewayDTO       `json:"data"`
+}
+
+type GatewayPageInfoDTO struct {
+	EndCursor  string `json:"end_cursor"`
+	HasNext    bool   `json:"has_next"`
+	TotalCount int64  `json:"total_count"`
+}
+
+type GatewayDTO struct {
+	ID                   string `json:"id"`
+	Name                 string `json:"name"`
+	CreatedAt            string `json:"created_at"`
+	ModifiedAt           string `json:"modified_at"`
+	ConfigUpdatesEnabled bool   `json:"config_updates_enabled"`
+	Managed              bool   `json:"managed"`
 }
 
 // New creates a client with a small, explicit surface area.
@@ -103,36 +120,20 @@ func (c *Client) ListGateways(ctx context.Context) (*GatewayListResult, error) {
 	}
 
 	return &GatewayListResult{
-		Items: listResponse.Items,
+		PageInfo: listResponse.PageInfo,
+		Items:    listResponse.Data,
 	}, nil
 }
 
 func decodeGatewayListResponse(body []byte) (*gatewayListResponseDTO, error) {
-	// TODO: Replace this temporary decoder with one confirmed /v2/gateways response
-	// envelope once a real API sample is available. Keep all envelope uncertainty in
-	// this client file so Terraform-facing code does not depend on guessed shapes.
-	var arrayItems []json.RawMessage
-	if err := json.Unmarshal(body, &arrayItems); err == nil {
-		return &gatewayListResponseDTO{Items: arrayItems}, nil
-	}
-
-	var envelope struct {
-		Data  []json.RawMessage `json:"data"`
-		Items []json.RawMessage `json:"items"`
-	}
-	if err := json.Unmarshal(body, &envelope); err != nil {
+	var response gatewayListResponseDTO
+	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, err
 	}
 
-	if len(envelope.Data) > 0 {
-		return &gatewayListResponseDTO{Items: envelope.Data}, nil
+	if response.Data == nil {
+		response.Data = []GatewayDTO{}
 	}
 
-	if len(envelope.Items) > 0 {
-		return &gatewayListResponseDTO{Items: envelope.Items}, nil
-	}
-
-	// TODO: Confirm the real empty-list envelope and whether pagination metadata is
-	// returned alongside /v2/gateways results in the sample response.
-	return &gatewayListResponseDTO{Items: []json.RawMessage{}}, nil
+	return &response, nil
 }
