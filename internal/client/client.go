@@ -23,6 +23,10 @@ type GatewayListResult struct {
 	Items []json.RawMessage
 }
 
+type gatewayListResponseDTO struct {
+	Items []json.RawMessage
+}
+
 // New creates a client with a small, explicit surface area.
 func New(baseURL, apiToken string, timeout time.Duration, insecure bool) *Client {
 	return &Client{
@@ -65,8 +69,8 @@ func (c *Client) Do(req *http.Request) (*http.Response, error) {
 	return resp, nil
 }
 
-// ListGateways calls GET /v2/gateways and extracts any gateway items without exposing
-// assumptions about the response envelope outside the client.
+// ListGateways calls GET /v2/gateways and extracts gateway items without exposing
+// response envelope assumptions outside the client.
 func (c *Client) ListGateways(ctx context.Context) (*GatewayListResult, error) {
 	req, err := c.NewRequest(ctx, http.MethodGet, "/v2/gateways")
 	if err != nil {
@@ -93,23 +97,23 @@ func (c *Client) ListGateways(ctx context.Context) (*GatewayListResult, error) {
 		return nil, fmt.Errorf("read gateways response: %w", err)
 	}
 
-	items, err := extractGatewayItems(body)
+	listResponse, err := decodeGatewayListResponse(body)
 	if err != nil {
 		return nil, fmt.Errorf("decode gateways response: %w", err)
 	}
 
 	return &GatewayListResult{
-		Items: items,
+		Items: listResponse.Items,
 	}, nil
 }
 
-func extractGatewayItems(body []byte) ([]json.RawMessage, error) {
-	// TODO: Confirm the real /v2/gateways response envelope. This helper currently
-	// accepts either a top-level JSON array or an object with a "data" or "items"
-	// array so the uncertainty stays inside the client.
+func decodeGatewayListResponse(body []byte) (*gatewayListResponseDTO, error) {
+	// TODO: Replace this temporary decoder with one confirmed /v2/gateways response
+	// envelope once a real API sample is available. Keep all envelope uncertainty in
+	// this client file so Terraform-facing code does not depend on guessed shapes.
 	var arrayItems []json.RawMessage
 	if err := json.Unmarshal(body, &arrayItems); err == nil {
-		return arrayItems, nil
+		return &gatewayListResponseDTO{Items: arrayItems}, nil
 	}
 
 	var envelope struct {
@@ -121,14 +125,14 @@ func extractGatewayItems(body []byte) ([]json.RawMessage, error) {
 	}
 
 	if len(envelope.Data) > 0 {
-		return envelope.Data, nil
+		return &gatewayListResponseDTO{Items: envelope.Data}, nil
 	}
 
 	if len(envelope.Items) > 0 {
-		return envelope.Items, nil
+		return &gatewayListResponseDTO{Items: envelope.Items}, nil
 	}
 
-	// TODO: Confirm whether an empty array can also be wrapped in another envelope
-	// field name, and whether pagination metadata is returned alongside the list.
-	return []json.RawMessage{}, nil
+	// TODO: Confirm the real empty-list envelope and whether pagination metadata is
+	// returned alongside /v2/gateways results in the sample response.
+	return &gatewayListResponseDTO{Items: []json.RawMessage{}}, nil
 }

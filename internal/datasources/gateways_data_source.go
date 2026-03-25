@@ -15,6 +15,8 @@ var (
 	_ datasource.DataSourceWithConfigure = &gatewaysDataSource{}
 )
 
+const gatewaysCollectionID = "gateways"
+
 type gatewaysDataSource struct {
 	client *client.Client
 }
@@ -68,8 +70,8 @@ func (d *gatewaysDataSource) Read(ctx context.Context, _ datasource.ReadRequest,
 	_, err := d.client.ListGateways(ctx)
 	if err != nil {
 		resp.Diagnostics.AddError(
-			"Unable to read gateways",
-			err.Error(),
+			"Unable to read GET /v2/gateways",
+			"The Netskope SD-WAN gateways list request failed: "+err.Error(),
 		)
 		return
 	}
@@ -77,7 +79,7 @@ func (d *gatewaysDataSource) Read(ctx context.Context, _ datasource.ReadRequest,
 	// TODO: Add Terraform-facing gateway attributes only after the real response
 	// item shape is confirmed. The client already isolates envelope uncertainty.
 	state := gatewaysDataSourceModel{
-		ID: types.StringValue("gateways"),
+		ID: types.StringValue(gatewaysCollectionID),
 	}
 
 	resp.Diagnostics.Append(resp.State.Set(ctx, &state)...)
