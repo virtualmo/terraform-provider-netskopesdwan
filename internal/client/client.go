@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -125,6 +126,41 @@ func (c *Client) ListGateways(ctx context.Context) (*GatewayListResult, error) {
 	}, nil
 }
 
+// GetGateway calls GET /v2/gateways/{id} and decodes the confirmed single-gateway response.
+func (c *Client) GetGateway(ctx context.Context, id string) (*GatewayDTO, error) {
+	req, err := c.NewRequest(ctx, http.MethodGet, "/v2/gateways/"+url.PathEscape(id))
+	if err != nil {
+		return nil, fmt.Errorf("build gateway request: %w", err)
+	}
+
+	resp, err := c.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("get gateway: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, readErr := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		if readErr != nil {
+			return nil, fmt.Errorf("get gateway: unexpected status %d and failed to read error body: %w", resp.StatusCode, readErr)
+		}
+
+		return nil, fmt.Errorf("get gateway: unexpected status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("read gateway response: %w", err)
+	}
+
+	gateway, err := decodeGatewayResponse(body)
+	if err != nil {
+		return nil, fmt.Errorf("decode gateway response: %w", err)
+	}
+
+	return gateway, nil
+}
+
 func decodeGatewayListResponse(body []byte) (*gatewayListResponseDTO, error) {
 	var response gatewayListResponseDTO
 	if err := json.Unmarshal(body, &response); err != nil {
@@ -133,6 +169,15 @@ func decodeGatewayListResponse(body []byte) (*gatewayListResponseDTO, error) {
 
 	if response.Data == nil {
 		response.Data = []GatewayDTO{}
+	}
+
+	return &response, nil
+}
+
+func decodeGatewayResponse(body []byte) (*GatewayDTO, error) {
+	var response GatewayDTO
+	if err := json.Unmarshal(body, &response); err != nil {
+		return nil, err
 	}
 
 	return &response, nil
