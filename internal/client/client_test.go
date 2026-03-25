@@ -86,7 +86,7 @@ func TestDecodeGatewayListResponseEmptyDataDefaultsToEmptySlice(t *testing.T) {
 	}
 }
 
-func TestDecodeGatewayResponse(t *testing.T) {
+func TestDecodeGatewayResponseBareObject(t *testing.T) {
 	t.Parallel()
 
 	body := []byte(`{

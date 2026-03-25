@@ -30,6 +30,10 @@ type gatewayListResponseDTO struct {
 	Data     []GatewayDTO       `json:"data"`
 }
 
+type gatewayResponseDTO struct {
+	Data GatewayDTO `json:"data"`
+}
+
 type GatewayPageInfoDTO struct {
 	EndCursor  string `json:"end_cursor"`
 	HasNext    bool   `json:"has_next"`
@@ -126,7 +130,7 @@ func (c *Client) ListGateways(ctx context.Context) (*GatewayListResult, error) {
 	}, nil
 }
 
-// GetGateway calls GET /v2/gateways/{id} and decodes the confirmed single-gateway response.
+// GetGateway calls GET /v2/gateways/{id} and decodes the current single-gateway response shape.
 func (c *Client) GetGateway(ctx context.Context, id string) (*GatewayDTO, error) {
 	req, err := c.NewRequest(ctx, http.MethodGet, "/v2/gateways/"+url.PathEscape(id))
 	if err != nil {
@@ -175,6 +179,8 @@ func decodeGatewayListResponse(body []byte) (*gatewayListResponseDTO, error) {
 }
 
 func decodeGatewayResponse(body []byte) (*GatewayDTO, error) {
+	// TODO: Replace this bare-object decoder if a real GET /v2/gateways/{id}
+	// sample shows the gateway is wrapped in an envelope such as {"data": {...}}.
 	var response GatewayDTO
 	if err := json.Unmarshal(body, &response); err != nil {
 		return nil, err
